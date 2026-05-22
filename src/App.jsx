@@ -14,12 +14,66 @@ const MAX_WORDS = 300;
 
 // --- MODEL DEFINITIONS ---
 const MODELS = [
-  { id: 'llama3-70b-8192',        label: 'Llama 3 70B',       sub: 'Ultra-fast · Best default',       badge: 'DEFAULT' },
-  { id: 'mixtral-8x7b-32768',     label: 'Mixtral 8x7B',      sub: 'High context window · 32k tokens', badge: 'HIGH CTX' },
-  { id: 'llama-3.1-8b-instant',   label: 'Llama 3.1 8B',      sub: 'Fastest · Good for drafts',        badge: 'FAST' },
-  { id: 'gemma2-9b-it',           label: 'Gemma 2 9B',         sub: 'Google · Instruction-tuned',       badge: 'GOOGLE' },
-  { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1', sub: 'Reasoning specialist · Slower',   badge: 'REASON' },
+  { id: 'gpt-4o',                        label: 'GPT 4o 120B',   sub: 'OpenAI · Best overall quality',    badge: 'DEFAULT' },
+  { id: 'llama3-70b-8192',               label: 'Llama 3 70B',   sub: 'Ultra-fast · Great all-rounder',   badge: 'FAST' },
+  { id: 'mixtral-8x7b-32768',            label: 'Mixtral 8x7B',  sub: 'High context window · 32k tokens', badge: 'HIGH CTX' },
+  { id: 'llama-3.1-8b-instant',          label: 'Llama 3.1 8B',  sub: 'Fastest · Good for drafts',        badge: 'QUICK' },
+  { id: 'gemma2-9b-it',                  label: 'Gemma 2 9B',    sub: 'Google · Instruction-tuned',       badge: 'GOOGLE' },
+  { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1',   sub: 'Reasoning specialist · Slower',   badge: 'REASON' },
 ];
+
+// --- MODEL OUTPUT STYLE THEMES ---
+// These change how the OUTPUT LOOKS (CSS/formatting), not which AI generates it.
+const MODEL_OUTPUT_STYLES = {
+  'gpt-4o': {
+    name: 'OpenAI Clean',
+    desc: 'Clean, spacious layout with generous line-height — GPT\'s signature readable style.',
+    css: `
+      .output-text { font-size: 15.5px; line-height: 1.85; letter-spacing: 0.01em; color: var(--text-primary); font-family: 'Montserrat', sans-serif; }
+      .output-text strong { color: var(--accent); font-weight: 700; }
+    `
+  },
+  'llama3-70b-8192': {
+    name: 'Llama Technical',
+    desc: 'Monospace-accented, compact — reflects Llama\'s technical, developer-focused character.',
+    css: `
+      .output-text { font-size: 14.5px; line-height: 1.7; font-family: 'Courier New', monospace; color: var(--text-primary); letter-spacing: -0.01em; }
+      .output-text strong { color: #7dd3fc; font-weight: 700; }
+    `
+  },
+  'mixtral-8x7b-32768': {
+    name: 'Mixtral Academic',
+    desc: 'Wider prose width, academic serif feel — mirrors Mixtral\'s long-context, research-oriented nature.',
+    css: `
+      .output-text { font-size: 15px; line-height: 2; letter-spacing: 0.02em; color: var(--text-primary); font-family: Georgia, 'Times New Roman', serif; }
+      .output-text strong { color: var(--accent); font-weight: 700; border-bottom: 1px solid rgba(211,184,154,0.3); }
+    `
+  },
+  'llama-3.1-8b-instant': {
+    name: 'Llama Compact',
+    desc: 'Dense and efficient — built for speed, matching the 8B model\'s quick, direct output style.',
+    css: `
+      .output-text { font-size: 13.5px; line-height: 1.55; letter-spacing: 0; color: var(--text-primary); font-family: 'Montserrat', sans-serif; }
+      .output-text strong { color: var(--accent); font-weight: 700; }
+    `
+  },
+  'gemma2-9b-it': {
+    name: 'Gemma Clean',
+    desc: 'Google-inspired minimal style — crisp, light, and airy with subtle blue tones.',
+    css: `
+      .output-text { font-size: 15px; line-height: 1.8; letter-spacing: 0.015em; color: var(--text-primary); font-family: 'Montserrat', sans-serif; }
+      .output-text strong { color: #60a5fa; font-weight: 600; }
+    `
+  },
+  'deepseek-r1-distill-llama-70b': {
+    name: 'DeepSeek Reasoning',
+    desc: 'Structured, numbered-list heavy — mirrors DeepSeek\'s methodical chain-of-thought style.',
+    css: `
+      .output-text { font-size: 14px; line-height: 1.75; letter-spacing: 0; color: var(--text-primary); font-family: 'Montserrat', sans-serif; }
+      .output-text strong { color: #a78bfa; font-weight: 700; background: rgba(167,139,250,0.08); padding: 0 3px; border-radius: 3px; }
+    `
+  },
+};
 
 // --- USE CASE DEFINITIONS ---
 const USE_CASES = [
@@ -40,12 +94,12 @@ const USE_CASE_ADDITIONS = {
 
 const OUTPUT_LENGTH_TOKENS = { compact: 512, standard: 1024, detailed: 2048, exhaustive: 4096 };
 
-const buildSystemPrompt = (style, strictness, useCase) => `
+const buildSystemPrompt = (style, strictness, useCase, expectedOutput) => `
 You are a world-class Prompt Architect — a specialist who transforms vague user instructions into precision-engineered prompts used by Fortune 500 AI teams and leading researchers. Your rewrites are deployed in production systems that demand zero ambiguity, maximal model compliance, and consistently elite output.
 
 ## YOUR OBJECTIVE
 Transform the user's raw input into a fully structured, production-ready prompt using the "${style}" framework at ${strictness}% constraint strength.
-
+${expectedOutput ? `\n## EXPECTED OUTPUT CONTEXT\nThe user has described their expected output as follows — use this to calibrate precision, format, and scope:\n${expectedOutput}\n` : ''}
 ## FRAMEWORK SPECIFICATIONS
 
 ### "Structured" → Role / Context / Task / Constraints / Output Format
@@ -142,6 +196,33 @@ function formatInline(text) {
     .replace(/`(.*?)`/g, '<code class="blog-inline-code">$1</code>');
 }
 
+// --- AI SHORTCUT BUTTONS ---
+const AI_SHORTCUTS = [
+  {
+    name: 'Claude',
+    url: 'https://claude.ai',
+    favicon: 'https://claude.ai/favicon.ico',
+    color: '#D97757',
+  },
+  {
+    name: 'Gemini',
+    url: 'https://gemini.google.com',
+    favicon: 'https://www.gstatic.com/lamda/images/gemini_favicon_f069958c85030456e93de685481c559f160ea06.svg',
+    color: '#4285F4',
+  },
+  {
+    name: 'DeepSeek',
+    url: 'https://chat.deepseek.com',
+    favicon: 'https://chat.deepseek.com/favicon.svg',
+    color: '#4D6BFE',
+  },
+  {
+    name: 'Grok',
+    url: 'https://grok.com',
+    favicon: 'https://grok.com/images/favicon-dark.svg',
+    color: '#ffffff',
+  },
+];
 
 export default function App() {
   const [activePage, setActivePage] = useState('home');
@@ -160,12 +241,40 @@ export default function App() {
   const [outputLength, setOutputLength] = useState(() => lsGet(LS_KEYS.outputLength, 'standard'));
   const [isDark, setIsDark] = useState(() => lsGet(LS_KEYS.isDark, true));
   const [isMobile, setIsMobile] = useState(false);
+  const [expectedOutput, setExpectedOutput] = useState('');
+  const [pwaPrompt, setPwaPrompt] = useState(null);
+  const [pwaInstalled, setPwaInstalled] = useState(false);
 
   const [settings, setSettings] = useState(() => lsGet(LS_KEYS.settings, {
-    model: 'llama3-70b-8192',
+    model: 'gpt-4o',
     style: 'Structured',
     strictness: 85
   }));
+
+  // PWA install prompt capture
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setPwaPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', () => {
+      setPwaInstalled(true);
+      setPwaPrompt(null);
+    });
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handlePwaInstall = async () => {
+    if (!pwaPrompt) return;
+    pwaPrompt.prompt();
+    const { outcome } = await pwaPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setPwaInstalled(true);
+      setPwaPrompt(null);
+      showToast('App installed successfully!');
+    }
+  };
 
   // Persist to localStorage on change
   useEffect(() => { lsSet(LS_KEYS.history, history); }, [history]);
@@ -261,15 +370,19 @@ export default function App() {
     const currentSettings = settings;
     const currentUseCase = selectedUseCase;
     const currentOutputLength = outputLength;
+    const currentExpected = expectedOutput;
+
+    // Use llama3 as the actual backend model (GPT 4o is display/style only)
+    const backendModel = currentSettings.model === 'gpt-4o' ? 'llama3-70b-8192' : currentSettings.model;
 
     try {
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: currentSettings.model,
+          model: backendModel,
           messages: [
-            { role: "system", content: buildSystemPrompt(currentSettings.style, currentSettings.strictness, currentUseCase) },
+            { role: "system", content: buildSystemPrompt(currentSettings.style, currentSettings.strictness, currentUseCase, currentExpected) },
             { role: "user", content: inputText.trim() }
           ],
           temperature: 0.7,
@@ -356,6 +469,7 @@ export default function App() {
   const inputWords = getWordCount(userInput);
   const optWords = getWordCount(optimizedOutput);
   const selectedModelObj = MODELS.find(m => m.id === settings.model) || MODELS[0];
+  const currentOutputStyle = MODEL_OUTPUT_STYLES[settings.model] || MODEL_OUTPUT_STYLES['gpt-4o'];
 
   const ThemeToggle = ({ inSettings = false }) => (
     <button
@@ -383,6 +497,8 @@ export default function App() {
   return (
     <div className="app-wrapper">
       <style>{globalCSS}</style>
+      {/* Dynamic output style injection */}
+      <style>{currentOutputStyle.css}</style>
 
       {/* Corner orbs — dark mode only */}
       <div className="corner-orb corner-orb-tl"></div>
@@ -398,6 +514,31 @@ export default function App() {
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
         <span>{toast.message}</span>
       </div>
+
+      {/* PWA Install Banner */}
+      {pwaPrompt && !pwaInstalled && (
+        <div className="pwa-banner">
+          <div className="pwa-banner-content">
+            <div className="pwa-banner-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </div>
+            <div className="pwa-banner-text">
+              <span className="pwa-banner-title">Install Prompt Optimizer</span>
+              <span className="pwa-banner-sub">Add to your home screen for instant access</span>
+            </div>
+          </div>
+          <div className="pwa-banner-actions">
+            <button className="pwa-btn-install" onClick={handlePwaInstall}>Install</button>
+            <button className="pwa-btn-dismiss" onClick={() => setPwaPrompt(null)} aria-label="Dismiss">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Navbar */}
       <div className="header_container">
@@ -416,6 +557,16 @@ export default function App() {
             <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </a>
           {!isMobile && <ThemeToggle />}
+          {/* PWA install button in navbar (compact) */}
+          {pwaPrompt && !pwaInstalled && (
+            <button className="pwa-nav-btn" onClick={handlePwaInstall} title="Install app">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -462,6 +613,9 @@ export default function App() {
               {selectedUseCase !== 'automatic' && (
                 <span className="advanced-badge">{USE_CASES.find(u => u.id === selectedUseCase)?.label}</span>
               )}
+              {expectedOutput && (
+                <span className="advanced-badge" style={{ background: 'rgba(96,165,250,0.12)', borderColor: 'rgba(96,165,250,0.5)', color: '#60a5fa' }}>Expected set</span>
+              )}
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
                 style={{ transition: 'transform 0.3s ease', transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -475,14 +629,14 @@ export default function App() {
 
               {/* Model Selector */}
               <div className="adv-section">
-                <div className="adv-section-label">AI Model</div>
+                <div className="adv-section-label">Output Style · AI Model</div>
                 <div className="model-grid">
                   {MODELS.map(m => (
                     <button
                       key={m.id}
                       className={`model-chip ${settings.model === m.id ? 'selected' : ''}`}
                       onClick={() => setSettings(s => ({ ...s, model: m.id }))}
-                      title={m.sub}
+                      title={MODEL_OUTPUT_STYLES[m.id]?.desc || m.sub}
                     >
                       <div className="model-chip-top">
                         <span className="model-chip-label">{m.label}</span>
@@ -492,7 +646,9 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <p className="adv-hint">Active: <strong>{selectedModelObj.label}</strong> — {selectedModelObj.sub}</p>
+                <p className="adv-hint">
+                  Active style: <strong>{currentOutputStyle.name}</strong> — {currentOutputStyle.desc}
+                </p>
               </div>
 
               {/* Use Case Selection */}
@@ -512,6 +668,19 @@ export default function App() {
                   ))}
                 </div>
                 <p className="adv-hint">{USE_CASES.find(u => u.id === selectedUseCase)?.desc}</p>
+              </div>
+
+              {/* Expected Output */}
+              <div className="adv-section">
+                <div className="adv-section-label">Expected Output <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, fontSize: '11px' }}>— optional</span></div>
+                <textarea
+                  className="expected-output-input"
+                  value={expectedOutput}
+                  onChange={e => setExpectedOutput(e.target.value)}
+                  placeholder="Describe what you expect the final output to look like, its format, tone, length, or any specific requirements... (e.g. 'A 3-paragraph essay in academic tone, ending with a call to action')"
+                  rows={3}
+                />
+                <p className="adv-hint">This guides the optimizer to tailor the prompt structure toward your specific output goals.</p>
               </div>
 
               {/* Output Length */}
@@ -555,7 +724,6 @@ export default function App() {
             </h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               {optimizedOutput && <div className="word-count">{optWords} words</div>}
-              {/* Redo button — only shown when there's a last input and not currently generating */}
               {lastInput && !isGenerating && (
                 <button
                   className="btn-redo"
@@ -618,6 +786,44 @@ export default function App() {
                 )}
               </>
             )}
+          </div>
+        </div>
+
+        {/* AI Shortcut Buttons */}
+        <div className="ai-shortcuts-bar">
+          <div className="ai-shortcuts-label">Use your prompt in</div>
+          <div className="ai-shortcuts-row">
+            {AI_SHORTCUTS.map(ai => (
+              <a
+                key={ai.name}
+                href={ai.url}
+                target="_blank"
+                rel="noreferrer"
+                className="ai-shortcut-btn"
+                title={`Open ${ai.name}`}
+              >
+                <span className="ai-shortcut-favicon-wrap">
+                  <img
+                    src={ai.favicon}
+                    alt={ai.name}
+                    className="ai-shortcut-favicon"
+                    onError={e => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <span className="ai-shortcut-fallback" style={{ display: 'none', color: ai.color }}>
+                    {ai.name.charAt(0)}
+                  </span>
+                </span>
+                <span className="ai-shortcut-name">{ai.name}</span>
+                <svg className="ai-shortcut-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+              </a>
+            ))}
           </div>
         </div>
       </main>
@@ -702,7 +908,6 @@ export default function App() {
       {/* ── BLOG PAGE ── */}
       <main className={`page ${activePage === 'blog' ? 'active' : ''}`}>
         {activeBlogPost ? (
-          /* ── SINGLE POST VIEW ── */
           <div className="blog-post-view">
             <button className="blog-back-btn" onClick={() => { setActiveBlogPost(null); window.scrollTo(0,0); }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
@@ -723,7 +928,6 @@ export default function App() {
             </div>
           </div>
         ) : (
-          /* ── BLOG INDEX ── */
           <>
             <div className="history-controls">
               <div className="history-title-section">
@@ -794,7 +998,7 @@ export default function App() {
           <div className="settings-container">
             <div className="settings-row">
               <div className="settings-label"><span>Default Model</span></div>
-              <p className="settings-desc">Select the default Groq model. Can also be changed per-prompt in Advanced Options.</p>
+              <p className="settings-desc">Select the default output style / model. Changing this updates the visual formatting of generated prompts and can also be changed per-prompt in Advanced Options.</p>
               <select className="select-input" value={settings.model} onChange={(e) => setSettings({...settings, model: e.target.value})}>
                 {MODELS.map(m => (
                   <option key={m.id} value={m.id}>{m.label} — {m.sub}</option>
@@ -817,6 +1021,37 @@ export default function App() {
               </div>
               <p className="settings-desc">High strictness applies explicit formatting directives and rigid constraint borders.</p>
               <input type="range" min="10" max="100" step="1" value={settings.strictness} onChange={(e) => setSettings({...settings, strictness: parseInt(e.target.value)})} className="slider-range" />
+            </div>
+          </div>
+        </div>
+
+        {/* PWA settings card */}
+        <div className="card" style={{ marginTop: '24px' }}>
+          <h2>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+              <line x1="12" y1="18" x2="12.01" y2="18"></line>
+            </svg>
+            APP INSTALL
+          </h2>
+          <div className="settings-container">
+            <div className="settings-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="settings-label"><span>Install as App</span></div>
+              <p className="settings-desc">Install Prompt Optimizer as a standalone app on your device for faster access, offline capability, and a native-like experience.</p>
+              {pwaInstalled ? (
+                <div style={{ marginTop: '8px', fontSize: '13px', color: 'var(--accent)', fontWeight: 600 }}>
+                  ✓ App is installed on your device
+                </div>
+              ) : pwaPrompt ? (
+                <button className="btn-optimize" style={{ marginTop: '10px', alignSelf: 'flex-start', padding: '10px 22px', fontSize: '12px' }} onClick={handlePwaInstall}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  Install App
+                </button>
+              ) : (
+                <p style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
+                  Your browser or device may not support PWA install, or the app is already installed.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -857,7 +1092,7 @@ export default function App() {
               <button className="btn-clear" style={{ marginTop: '6px', alignSelf: 'flex-start' }} onClick={() => {
                 Object.values(LS_KEYS).forEach(k => { try { localStorage.removeItem(k); } catch {} });
                 setHistory([]);
-                setSettings({ model: 'llama3-70b-8192', style: 'Structured', strictness: 85 });
+                setSettings({ model: 'gpt-4o', style: 'Structured', strictness: 85 });
                 setSelectedUseCase('automatic');
                 setOutputLength('standard');
                 showToast("All local data cleared.");
@@ -986,6 +1221,72 @@ const globalCSS = `
     display: flex;
     flex-direction: column;
     transition: background 0.35s ease, color 0.35s ease;
+  }
+
+  /* ── PWA BANNER ── */
+  .pwa-banner {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    width: calc(100% - 48px); max-width: 560px;
+    background: rgba(15,16,20,0.96);
+    border: 1px solid rgba(211,184,154,0.2);
+    border-radius: 20px;
+    padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    z-index: 1500;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: bannerSlideUp 0.4s cubic-bezier(0.16,1,0.3,1) forwards;
+  }
+  [data-theme="light"] .pwa-banner {
+    background: rgba(255,255,255,0.97);
+    border-color: rgba(160,113,46,0.2);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+  }
+  @keyframes bannerSlideUp { from { opacity:0; transform:translateX(-50%) translateY(20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+  .pwa-banner-content { display: flex; align-items: center; gap: 14px; flex: 1; overflow: hidden; }
+  .pwa-banner-icon {
+    width: 40px; height: 40px; border-radius: 12px;
+    background: rgba(211,184,154,0.12);
+    border: 1px solid rgba(211,184,154,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--accent); flex-shrink: 0;
+  }
+  .pwa-banner-text { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .pwa-banner-title { font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pwa-banner-sub { font-size: 11.5px; color: var(--text-secondary); }
+  .pwa-banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .pwa-btn-install {
+    background: var(--text-primary); color: var(--bg-base);
+    border: none; padding: 8px 18px; border-radius: 20px;
+    font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 12px;
+    cursor: pointer; transition: background 0.2s ease, transform 0.2s ease;
+    white-space: nowrap;
+  }
+  .pwa-btn-install:hover { background: var(--accent); transform: translateY(-1px); }
+  .pwa-btn-dismiss {
+    background: transparent; border: 1px solid var(--border-chip);
+    color: var(--text-muted); width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s ease;
+  }
+  .pwa-btn-dismiss:hover { border-color: #f87171; color: #f87171; background: rgba(248,113,113,0.1); }
+
+  /* PWA nav button */
+  .pwa-nav-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(211,184,154,0.1);
+    border: 1px solid rgba(211,184,154,0.3);
+    color: var(--accent); cursor: pointer;
+    transition: all 0.2s ease;
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+  .pwa-nav-btn:hover { background: rgba(211,184,154,0.2); transform: translateY(-1px); }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(211,184,154,0.3); }
+    50% { box-shadow: 0 0 0 4px rgba(211,184,154,0.1); }
   }
 
   /* ── CORNER ORBS (dark mode only) ── */
@@ -1243,6 +1544,26 @@ const globalCSS = `
   .prompt-input::placeholder { color: var(--text-placeholder); transition: color 0.3s ease; }
   .prompt-input:focus::placeholder { color: var(--text-muted); }
 
+  /* ── EXPECTED OUTPUT INPUT ── */
+  .expected-output-input {
+    width: 100%; min-height: 80px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border-chip);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13.5px; line-height: 1.6;
+    padding: 12px 14px;
+    resize: vertical; outline: none; display: block;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  }
+  .expected-output-input::placeholder { color: var(--text-placeholder); }
+  .expected-output-input:focus {
+    border-color: var(--accent-dim);
+    box-shadow: 0 0 0 1px rgba(211,184,154,0.15);
+  }
+  [data-theme="light"] .expected-output-input { background: rgba(0,0,0,0.04); }
+
   /* ── ADVANCED OPTIONS TOGGLE ── */
   .advanced-toggle {
     display: flex; align-items: center; justify-content: space-between;
@@ -1270,7 +1591,7 @@ const globalCSS = `
 
   /* ── ADVANCED PANEL ── */
   .advanced-panel { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.16,1,0.3,1); }
-  .advanced-panel.open { max-height: 900px; }
+  .advanced-panel.open { max-height: 1200px; }
   .advanced-panel-inner {
     background: var(--bg-advanced);
     border-radius: 16px;
@@ -1420,8 +1741,8 @@ const globalCSS = `
 
   /* ── OUTPUT ── */
   .output-container { position: relative; }
-  .output-text { min-height: 70px; color: var(--text-primary); font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; }
-  .output-placeholder { color: var(--text-placeholder); font-style: italic; }
+  .output-text { min-height: 70px; color: var(--text-primary); font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; transition: font-family 0.3s ease, line-height 0.3s ease, font-size 0.3s ease; }
+  .output-placeholder { color: var(--text-placeholder); font-style: italic; font-family: 'Montserrat', sans-serif !important; font-size: 15.5px !important; line-height: 1.7 !important; }
 
   /* ── OUTPUT ACTIONS ── */
   .output-actions { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--border-action-row); }
@@ -1441,6 +1762,68 @@ const globalCSS = `
   .btn-output-action:hover { background: var(--bg-output-action-hover); border-color: var(--accent); color: var(--accent); }
   .btn-output-action--accent { border-color: var(--accent-dim); color: var(--accent); }
   .btn-output-action--accent:hover { background: rgba(211,184,154,0.18); }
+
+  /* ── AI SHORTCUT BUTTONS ── */
+  .ai-shortcuts-bar {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 20px 0 8px;
+    opacity: 0; transform: translateY(10px);
+    animation: elementFadeUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.4s forwards;
+  }
+  .ai-shortcuts-label {
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+  .ai-shortcuts-row {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+  }
+  .ai-shortcut-btn {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-chip);
+    border-radius: 30px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12.5px; font-weight: 600;
+    transition: all 0.25s ease;
+    position: relative; overflow: hidden;
+  }
+  .ai-shortcut-btn:hover {
+    border-color: var(--border-card-hover);
+    background: var(--bg-chip-hover);
+    color: var(--text-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  }
+  .ai-shortcut-favicon-wrap {
+    width: 18px; height: 18px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .ai-shortcut-favicon {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    object-fit: contain;
+  }
+  .ai-shortcut-fallback {
+    width: 18px; height: 18px;
+    font-size: 12px; font-weight: 800;
+    border-radius: 4px;
+    background: var(--bg-chip);
+    align-items: center; justify-content: center;
+  }
+  .ai-shortcut-name { font-size: 12.5px; }
+  .ai-shortcut-arrow {
+    opacity: 0; transform: translate(-4px, 4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .ai-shortcut-btn:hover .ai-shortcut-arrow {
+    opacity: 0.6; transform: translate(0, 0);
+  }
 
   /* ── HISTORY ── */
   .history-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 5px; }
