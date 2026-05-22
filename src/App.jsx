@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 // --- CONFIGURATION & SAFE ENV RETRIEVAL ---
-// This safe helper avoids build-time target compilation warnings in older ES2015 setups
 const getApiKey = () => {
   try {
-    // Check standard Vite static replacement
     const viteKey = import.meta.env.VITE_GROQ_API_KEY;
     if (viteKey) return viteKey;
   } catch (e) {}
   
   try {
-    // Fallback to standard process environment variables (Webpack/CRA)
     if (typeof process !== 'undefined' && process.env) {
       return process.env.REACT_APP_GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || "";
     }
@@ -167,6 +164,7 @@ export default function App() {
     const handleKeyDown = (e) => {
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
       
+      // Submit Prompt
       if (isCtrlOrCmd && e.key === 'Enter') {
         e.preventDefault();
         const state = stateRef.current;
@@ -175,6 +173,7 @@ export default function App() {
         }
       }
 
+      // Copy Optimized Output
       if (isCtrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'c') {
         e.preventDefault();
         const state = stateRef.current;
@@ -182,6 +181,20 @@ export default function App() {
           copyText(state.optimizedOutput);
         }
       }
+      
+      // Clear Input
+      if (isCtrlOrCmd && e.key === 'Backspace') {
+        e.preventDefault();
+        if (stateRef.current.activePage === 'home') {
+          setUserInput('');
+          showToast("Input Cleared");
+        }
+      }
+
+      // Navigation Shortcuts
+      if (isCtrlOrCmd && e.key === '1') { e.preventDefault(); setActivePage('home'); window.scrollTo(0,0); }
+      if (isCtrlOrCmd && e.key === '2') { e.preventDefault(); setActivePage('history'); window.scrollTo(0,0); }
+      if (isCtrlOrCmd && e.key === '3') { e.preventDefault(); setActivePage('settings'); window.scrollTo(0,0); }
     };
 
     document.addEventListener('keydown', handleKeyDown);
@@ -220,13 +233,13 @@ export default function App() {
       <div className="header_container">
         <div className="logo_part1">PROMPT OPTIMIZER</div>
         <div className="nav_icons">
-          <a className={`icon_link ${activePage === 'home' ? 'active' : ''}`} onClick={() => setActivePage('home')} title="Home">
+          <a className={`icon_link ${activePage === 'home' ? 'active' : ''}`} onClick={() => { setActivePage('home'); window.scrollTo(0,0); }} title="Home (Ctrl+1)">
             <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
           </a>
-          <a className={`icon_link ${activePage === 'history' ? 'active' : ''}`} onClick={() => setActivePage('history')} title="History">
+          <a className={`icon_link ${activePage === 'history' ? 'active' : ''}`} onClick={() => { setActivePage('history'); window.scrollTo(0,0); }} title="History (Ctrl+2)">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
           </a>
-          <a className={`icon_link ${activePage === 'settings' ? 'active' : ''}`} onClick={() => setActivePage('settings')} title="Settings">
+          <a className={`icon_link ${activePage === 'settings' ? 'active' : ''}`} onClick={() => { setActivePage('settings'); window.scrollTo(0,0); }} title="Settings (Ctrl+3)">
             <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </a>
         </div>
@@ -234,10 +247,16 @@ export default function App() {
 
       {/* --- HOME PAGE --- */}
       <main className={`page ${activePage === 'home' ? 'active' : ''}`}>
+        
+        {/* NEW: Animated Hero Header */}
+        <h1 className="hero-header">
+          Write Better Prompts, <span className="instantly-text">instantly</span>
+        </h1>
+
         <div className="card">
           <div className="card-header-flex">
             <h2>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
               INPUT PROMPT
             </h2>
             <div className={`word-count ${inputWords >= MAX_WORDS ? 'limit-reached' : ''}`}>{inputWords} / {MAX_WORDS} words</div>
@@ -306,7 +325,7 @@ export default function App() {
         <div className="history-list">
           {history.length === 0 ? (
             <div className="card no-history-state" style={{ opacity: 1, transform: 'none' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style={{ marginBottom: '10px', color: 'rgba(255,255,255,0.2)' }}><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '10px', color: 'rgba(255,255,255,0.2)' }}><path d="M12 8v4l3 3"></path><circle cx="12" cy="12" r="9"></circle></svg>
               <p>No optimization logs found. Try building your first prompt on the Home screen!</p>
             </div>
           ) : (
@@ -317,12 +336,12 @@ export default function App() {
                   <div className="history-item-header" onClick={() => toggleHistoryItem(item.id)}>
                     <div className="header-left-group">
                       <span className="chevron-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                       </span>
                       <span className="history-preview-text">{item.original}</span>
                     </div>
                     <span className="history-timestamp">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style={{ display:'inline-block', verticalAlign: 'middle', marginRight: '4px' }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display:'inline-block', verticalAlign: 'middle', marginRight: '4px' }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                       {item.timestamp}
                     </span>
                   </div>
@@ -341,12 +360,12 @@ export default function App() {
                           <div className="prompt-box-title" style={{ color: '#D3B89A' }}>Systemic Output Structure</div>
                           <div className="prompt-box-stats" style={{ color: '#D3B89A', background: 'rgba(211, 184, 154, 0.1)' }}>{item.optWords} Words</div>
                         </div>
-                        <div className="prompt-box-content" style={{ color: '#fff' }}>{item.optimized}</div>
+                        <div className="prompt-box-content" style={{ color: '#e8e8e8' }}>{item.optimized}</div>
                       </div>
                     </div>
                     <div className="history-actions">
                       <button className="btn-copy" onClick={(e) => { e.stopPropagation(); copyText(item.optimized); }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                         Copy Optimized Prompt
                       </button>
                     </div>
@@ -369,7 +388,7 @@ export default function App() {
 
         <div className="card">
           <h2>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"></path></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"></path></svg>
             AI Model Engine Preferences
           </h2>
           <div className="settings-container">
@@ -413,18 +432,44 @@ export default function App() {
                 <span>Optimize Prompt</span>
                 <p className="settings-desc" style={{ marginTop: '4px' }}>Quickly generate an optimized prompt while typing.</p>
               </div>
-              <span style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: '#D3B89A' }}>Ctrl/Cmd + Enter</span>
+              <span className="shortcut-badge">Ctrl/Cmd + Enter</span>
             </div>
-            <div className="settings-row" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottom: 'none', paddingBottom: 0 }}>
+            <div className="settings-row" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="settings-label" style={{ display: 'block' }}>
                 <span>Copy Output</span>
                 <p className="settings-desc" style={{ marginTop: '4px' }}>Copy the latest generated prompt from the Home page.</p>
               </div>
-              <span style={{ background: 'rgba(255,255,255,0.1)', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 600, color: '#D3B89A' }}>Ctrl/Cmd + Shift + C</span>
+              <span className="shortcut-badge">Ctrl/Cmd + Shift + C</span>
+            </div>
+            <div className="settings-row" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="settings-label" style={{ display: 'block' }}>
+                <span>Clear Input Area</span>
+                <p className="settings-desc" style={{ marginTop: '4px' }}>Instantly erase your current draft on the Home page.</p>
+              </div>
+              <span className="shortcut-badge">Ctrl/Cmd + Backspace</span>
+            </div>
+            <div className="settings-row" style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="settings-label" style={{ display: 'block' }}>
+                <span>Quick Navigation</span>
+                <p className="settings-desc" style={{ marginTop: '4px' }}>Switch between Home (1), History (2), and Settings (3).</p>
+              </div>
+              <span className="shortcut-badge">Ctrl/Cmd + 1 / 2 / 3</span>
             </div>
           </div>
         </div>
       </main>
+
+      {/* NEW: App Footer */}
+      <footer className="app-footer">
+        <div className="footer-links">
+          <a href="https://github.com/NOTAM-bobk/Promots.Optimzed/tree/main" target="_blank" rel="noreferrer">View Source Code</a>
+          <a href="#">About</a>
+          <a href="#">Prompts</a>
+          <a href="#">Privacy</a>
+          <a href="#">Terms</a>
+        </div>
+      </footer>
+
     </div>
   );
 }
@@ -435,14 +480,28 @@ export default function App() {
 const globalCSS = `
   @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Oswald:wght@200;300;400;500&display=swap');
 
+  /* Fixing the white border issue across deployments */
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100vh;
+    background: #06070a;
+  }
+  
+  * {
+    box-sizing: border-box;
+  }
+
   .app-wrapper {
     min-height: 100vh;
     background: #06070a; 
     overflow-x: hidden;
     font-family: 'Montserrat', sans-serif;
-    color: #fff;
+    color: #f0f0f0;
     user-select: none;
-    padding-bottom: 40px;
+    display: flex;
+    flex-direction: column;
   }
 
   /* --- ANIMATED WHITE/GOLD ORBS --- */
@@ -503,7 +562,6 @@ const globalCSS = `
       justify-content: space-between;
       align-items: center;
       padding: 0 35px;
-      box-sizing: border-box;
       z-index: 1000;
       opacity: 0;
       animation: slideDownIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -511,7 +569,7 @@ const globalCSS = `
   }
 
   .logo_part1 {
-      color: #c3c2c2;
+      color: #e0e0e0;
       font-family: 'Oswald', sans-serif;
       font-size: 14px;
       font-weight: 300;
@@ -581,14 +639,14 @@ const globalCSS = `
   /* --- PAGES AND LAYOUT SYSTEM --- */
   .page {
       display: none;
-      padding-top: 140px;
-      margin-bottom: 60px;
+      padding-top: 130px; /* Reduced slightly to fit header */
       width: 90%;
       max-width: 800px;
       margin-left: auto;
       margin-right: auto;
       z-index: 10;
       position: relative;
+      flex: 1; /* Pushes footer down */
   }
 
   .page.active {
@@ -596,6 +654,38 @@ const globalCSS = `
       flex-direction: column;
       gap: 28px;
       animation: pageFadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  /* --- HERO HEADER (NEW) --- */
+  .hero-header {
+      text-align: center;
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0 0 10px 0;
+      opacity: 0;
+      animation: flyInBlur 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      letter-spacing: -0.5px;
+  }
+
+  .instantly-text {
+      color: #9a9a9a;
+      position: relative;
+      display: inline-block;
+  }
+
+  .instantly-text::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      bottom: -2px;
+      width: 100%;
+      height: 3px;
+      background-color: #9a9a9a;
+      border-radius: 2px;
+      transform: scaleX(0);
+      transform-origin: left;
+      animation: drawUnderline 0.7s ease-out 1.2s forwards;
   }
 
   /* --- CARDS & PANELS --- */
@@ -616,8 +706,8 @@ const globalCSS = `
       animation: elementFadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 
-  .page.active .card:nth-child(1) { animation-delay: 0.15s; }
-  .page.active .card:nth-child(2) { animation-delay: 0.3s; }
+  .page.active .card:nth-child(2) { animation-delay: 0.15s; }
+  .page.active .card:nth-child(3) { animation-delay: 0.3s; }
 
   .card:hover {
       border-color: rgba(255, 255, 255, 0.1);
@@ -635,9 +725,9 @@ const globalCSS = `
       margin: 0;
       font-size: 13px;
       font-family: 'Oswald', sans-serif;
-      font-weight: 300;
+      font-weight: 400;
       letter-spacing: 2px;
-      color: #a6a5a5;
+      color: #b5b5b5;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -650,13 +740,13 @@ const globalCSS = `
   /* --- WORD COUNTERS --- */
   .word-count {
       font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.4);
       font-family: 'Montserrat', sans-serif;
-      font-weight: 500;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 4px 10px;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 5px 12px;
       border-radius: 20px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
   .word-count.limit-reached {
@@ -664,28 +754,27 @@ const globalCSS = `
       border-color: rgba(248, 113, 113, 0.3);
   }
 
-  /* --- FORM ELEMENTS --- */
+  /* --- FORM ELEMENTS (IMPROVED READABILITY) --- */
   .prompt-input {
       width: 100%;
-      height: 110px;
+      height: 120px;
       background: transparent;
       border: none;
-      color: #fff;
+      color: #ffffff; /* Brighter for readability */
       font-family: 'Montserrat', sans-serif;
-      font-size: 15px;
+      font-size: 16px; /* Increased font size */
       line-height: 1.6;
       resize: none;
       outline: none;
-      box-sizing: border-box;
   }
 
   .prompt-input::placeholder {
-      color: rgba(255, 255, 255, 0.25);
+      color: rgba(255, 255, 255, 0.3);
       transition: color 0.3s ease;
   }
 
   .prompt-input:focus::placeholder {
-      color: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.15);
   }
 
   .action-row {
@@ -693,26 +782,26 @@ const globalCSS = `
       justify-content: space-between;
       align-items: center;
       margin-top: 15px;
-      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
       padding-top: 15px;
   }
 
   .btn-optimize {
-      background: #fff;
+      background: #ffffff;
       color: #06070a;
       border: none;
       padding: 12px 28px;
       border-radius: 30px;
       font-family: 'Montserrat', sans-serif;
       font-weight: 700;
-      font-size: 12px;
+      font-size: 13px;
       letter-spacing: 0.5px;
       cursor: pointer;
       transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
       display: flex;
       align-items: center;
       gap: 8px;
-      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.15);
       margin-left: auto;
   }
 
@@ -732,25 +821,24 @@ const globalCSS = `
 
   .output-text {
       min-height: 70px;
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 14.5px;
+      color: #f0f0f0; /* Brighter for readability */
+      font-size: 15.5px; /* Larger font */
       line-height: 1.7;
       white-space: pre-wrap;
       transition: color 0.3s ease;
   }
 
   .output-placeholder {
-      color: rgba(255, 255, 255, 0.3);
+      color: rgba(255, 255, 255, 0.35);
       font-style: italic;
   }
 
-  /* --- HIGH TECH LOADING EFFECT --- */
   .loading-shimmer {
       display: flex;
       align-items: center;
       gap: 12px;
       color: #D3B89A;
-      font-weight: 500;
+      font-weight: 600;
       font-size: 14px;
       padding: 20px 0;
   }
@@ -762,10 +850,6 @@ const globalCSS = `
       border-top-color: #D3B89A;
       border-radius: 50%;
       animation: spin 0.8s infinite linear;
-  }
-
-  @keyframes spin {
-      to { transform: rotate(360deg); }
   }
 
   /* --- HISTORY VIEW UI --- */
@@ -781,25 +865,25 @@ const globalCSS = `
   .history-title-section h1 {
       margin: 0;
       font-size: 24px;
-      font-weight: 400;
+      font-weight: 600;
       letter-spacing: 1px;
       font-family: 'Oswald', sans-serif;
-      color: #fff;
+      color: #ffffff;
   }
 
   .history-title-section p {
       margin: 4px 0 0 0;
-      font-size: 13px;
-      color: rgba(255,255,255,0.4);
+      font-size: 13.5px;
+      color: rgba(255,255,255,0.5);
   }
 
   .btn-clear {
       background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      color: rgba(255, 255, 255, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: rgba(255, 255, 255, 0.7);
       border-radius: 30px;
       padding: 8px 16px;
-      font-size: 11px;
+      font-size: 12px;
       font-family: 'Montserrat', sans-serif;
       font-weight: 600;
       cursor: pointer;
@@ -809,7 +893,7 @@ const globalCSS = `
   .btn-clear:hover {
       border-color: #f87171;
       color: #f87171;
-      background: rgba(248, 113, 113, 0.05);
+      background: rgba(248, 113, 113, 0.1);
   }
 
   .history-list {
@@ -818,20 +902,19 @@ const globalCSS = `
       gap: 16px;
   }
 
-  /* --- COLLAPSIBLE HISTORY ITEMS --- */
   .history-item {
       display: flex;
       flex-direction: column;
       background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 20px;
       overflow: hidden;
       transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
   .history-item:hover {
-      border-color: rgba(255, 255, 255, 0.12);
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
   }
 
   .history-item-header {
@@ -846,7 +929,7 @@ const globalCSS = `
   }
 
   .history-item-header:hover {
-      background: rgba(255, 255, 255, 0.03);
+      background: rgba(255, 255, 255, 0.04);
   }
 
   .header-left-group {
@@ -859,7 +942,7 @@ const globalCSS = `
   }
 
   .chevron-icon {
-      color: rgba(255, 255, 255, 0.4);
+      color: rgba(255, 255, 255, 0.5);
       transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), color 0.3s ease;
       flex-shrink: 0;
       display: flex;
@@ -872,18 +955,18 @@ const globalCSS = `
   }
 
   .history-preview-text {
-      font-size: 14px;
+      font-size: 14.5px;
       font-weight: 500;
-      color: rgba(255, 255, 255, 0.85);
+      color: rgba(255, 255, 255, 0.9);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
   }
 
   .history-timestamp {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.3);
-      font-weight: 500;
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 600;
       white-space: nowrap;
       flex-shrink: 0;
   }
@@ -894,7 +977,7 @@ const globalCSS = `
       visibility: hidden;
       transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, padding 0.3s ease;
       box-sizing: border-box;
-      background: rgba(0, 0, 0, 0.1);
+      background: rgba(0, 0, 0, 0.15);
   }
 
   .history-item.expanded .history-item-content {
@@ -902,7 +985,7 @@ const globalCSS = `
       opacity: 1;
       visibility: visible;
       padding: 0 24px 24px 24px;
-      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .history-subgrid {
@@ -919,10 +1002,10 @@ const globalCSS = `
   }
 
   .prompt-box {
-      background: rgba(0, 0, 0, 0.2);
+      background: rgba(0, 0, 0, 0.25);
       border-radius: 12px;
       padding: 18px;
-      border: 1px solid rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
       position: relative;
   }
 
@@ -930,29 +1013,30 @@ const globalCSS = `
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
   }
 
   .prompt-box-title {
-      font-size: 10px;
+      font-size: 11px;
       font-family: 'Oswald', sans-serif;
       letter-spacing: 1.5px;
-      color: rgba(255, 255, 255, 0.45);
+      color: rgba(255, 255, 255, 0.5);
       text-transform: uppercase;
   }
   
   .prompt-box-stats {
       font-size: 10px;
-      color: rgba(255, 255, 255, 0.25);
-      background: rgba(255,255,255,0.05);
-      padding: 2px 6px;
+      color: rgba(255, 255, 255, 0.35);
+      background: rgba(255,255,255,0.08);
+      padding: 3px 8px;
       border-radius: 10px;
+      font-weight: 600;
   }
 
   .prompt-box-content {
-      font-size: 13.5px;
+      font-size: 14.5px;
       line-height: 1.6;
-      color: rgba(255, 255, 255, 0.75);
+      color: #e8e8e8; /* Increased readability */
       white-space: pre-wrap;
   }
 
@@ -960,36 +1044,29 @@ const globalCSS = `
       display: flex;
       justify-content: flex-end;
       gap: 10px;
-      margin-top: 16px;
+      margin-top: 18px;
   }
 
   .btn-copy {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #fff;
-      font-size: 11px;
-      padding: 7px 16px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 8px 18px;
       border-radius: 30px;
       cursor: pointer;
       transition: all 0.2s ease;
       font-family: 'Montserrat', sans-serif;
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
   }
 
   .btn-copy:hover {
-      background: rgba(211, 184, 154, 0.1);
+      background: rgba(211, 184, 154, 0.15);
       border-color: #D3B89A;
       color: #D3B89A;
-  }
-
-  .no-history-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: rgba(255, 255, 255, 0.3);
-      font-style: italic;
-      font-size: 14px;
   }
 
   /* --- SETTINGS PAGE UI --- */
@@ -1004,7 +1081,7 @@ const globalCSS = `
       flex-direction: column;
       gap: 10px;
       padding-bottom: 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .settings-row:last-child {
@@ -1013,9 +1090,9 @@ const globalCSS = `
   }
 
   .settings-label {
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 600;
-      color: rgba(255, 255, 255, 0.8);
+      color: #f0f0f0;
       display: flex;
       justify-content: space-between;
   }
@@ -1025,9 +1102,20 @@ const globalCSS = `
   }
 
   .settings-desc {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.4);
+      font-size: 12.5px;
+      color: rgba(255, 255, 255, 0.45);
       margin: 0;
+  }
+
+  .shortcut-badge {
+      background: rgba(255,255,255,0.1);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #D3B89A;
+      white-space: nowrap;
+      margin-left: 15px;
   }
 
   .slider-range {
@@ -1035,7 +1123,7 @@ const globalCSS = `
       width: 100%;
       height: 6px;
       border-radius: 5px;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.15);
       outline: none;
       margin-top: 8px;
   }
@@ -1046,7 +1134,7 @@ const globalCSS = `
       width: 18px;
       height: 18px;
       border-radius: 50%;
-      background: #fff;
+      background: #ffffff;
       cursor: pointer;
       transition: background 0.2s ease, transform 0.2s ease;
       border: 2px solid #06070a;
@@ -1059,13 +1147,13 @@ const globalCSS = `
 
   .select-input {
       width: 100%;
-      padding: 12px;
+      padding: 12px 14px;
       border-radius: 12px;
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #ffffff;
       font-family: 'Montserrat', sans-serif;
-      font-size: 13px;
+      font-size: 13.5px;
       outline: none;
       cursor: pointer;
       transition: border-color 0.3s ease;
@@ -1073,6 +1161,30 @@ const globalCSS = `
 
   .select-input:focus {
       border-color: #D3B89A;
+  }
+
+  /* --- FOOTER (NEW) --- */
+  .app-footer {
+      text-align: center;
+      padding: 40px 20px;
+      margin-top: 40px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 25px;
+      flex-wrap: wrap;
+  }
+  .footer-links a {
+      color: rgba(255, 255, 255, 0.35);
+      text-decoration: none;
+      font-size: 12.5px;
+      font-weight: 500;
+      transition: color 0.2s ease;
+  }
+  .footer-links a:hover {
+      color: #D3B89A;
   }
 
   /* --- TOAST NOTIFICATIONS --- */
@@ -1114,4 +1226,10 @@ const globalCSS = `
   @keyframes removeCursor { to { border-right: 2px solid transparent; } }
   @keyframes pageFadeUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes elementFadeUp { to { opacity: 1; transform: translateY(0); } }
+  @keyframes flyInBlur {
+    0% { transform: translateY(-30px); filter: blur(10px); opacity: 0; }
+    100% { transform: translateY(0); filter: blur(0); opacity: 1; }
+  }
+  @keyframes drawUnderline { to { transform: scaleX(1); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
 `;
