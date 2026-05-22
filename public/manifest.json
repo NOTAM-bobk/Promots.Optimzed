@@ -1,1 +1,37 @@
-
+{
+  "name": "AI Prompt Optimizer",
+  "short_name": "Prompt Opt",
+  "description": "Write better prompts instantly using advanced systemic logic routing via Groq.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#06070a",
+  "theme_color": "#06070a",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/ai.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ai.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/ai.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/ai.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
