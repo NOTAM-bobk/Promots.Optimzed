@@ -2,19 +2,39 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>AI Prompt Optimizer</title>
     
-    <!-- Tab Icon (Favicon) -->
+    <!-- Standard Favicon & Theme -->
     <link rel="icon" type="image/png" href="/ai.png" />
-    <!-- Apple / iOS Home Screen Icon (PWA) -->
-    <link rel="apple-touch-icon" href="/ai.png" />
-    <!-- Android / Chrome Theme Color -->
     <meta name="theme-color" content="#06070a" />
+
+    <!-- Web App Manifest (Android & Desktop configuration) -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Apple / iOS Specific PWA Setup -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Prompt Optimizer" />
+    <link rel="apple-touch-icon" href="/ai.png" />
+    
+    <!-- Microsoft / Windows Tile Configuration -->
+    <meta name="msapplication-TileImage" content="/ai.png" />
+    <meta name="msapplication-TileColor" content="#06070a" />
   </head>
   <body>
     <div id="root"></div>
-    <!-- Make sure the src path matches your entry file (e.g., src/index.jsx or src/main.jsx) -->
     <script type="module" src="/src/index.jsx"></script>
+
+    <!-- Service Worker Registration Script (Safe PWA lifecycle trigger) -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('Service Worker registered successfully:', reg.scope))
+            .catch(err => console.error('Service Worker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
