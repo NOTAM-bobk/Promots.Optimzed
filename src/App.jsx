@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BLOG_POSTS } from './blogData';
 
 // --- CONFIGURATION ---
 const getApiKey = () => {
@@ -10,6 +11,15 @@ const getApiKey = () => {
 const GROQ_API_KEY = getApiKey();
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_WORDS = 300;
+
+// --- MODEL DEFINITIONS ---
+const MODELS = [
+  { id: 'llama3-70b-8192',        label: 'Llama 3 70B',       sub: 'Ultra-fast · Best default',       badge: 'DEFAULT' },
+  { id: 'mixtral-8x7b-32768',     label: 'Mixtral 8x7B',      sub: 'High context window · 32k tokens', badge: 'HIGH CTX' },
+  { id: 'llama-3.1-8b-instant',   label: 'Llama 3.1 8B',      sub: 'Fastest · Good for drafts',        badge: 'FAST' },
+  { id: 'gemma2-9b-it',           label: 'Gemma 2 9B',         sub: 'Google · Instruction-tuned',       badge: 'GOOGLE' },
+  { id: 'deepseek-r1-distill-llama-70b', label: 'DeepSeek R1', sub: 'Reasoning specialist · Slower',   badge: 'REASON' },
+];
 
 // --- USE CASE DEFINITIONS ---
 const USE_CASES = [
@@ -72,39 +82,107 @@ ${USE_CASE_ADDITIONS[useCase] || ''}
 - The prompt must be self-contained: a model with zero prior context should execute it flawlessly
 `.trim();
 
+// --- LOCAL STORAGE HELPERS ---
+const LS_KEYS = { history: 'po_history', settings: 'po_settings', useCase: 'po_useCase', outputLength: 'po_outputLength', isDark: 'po_isDark', selectedModel: 'po_selectedModel' };
+
+const lsGet = (key, fallback) => {
+  try { const v = localStorage.getItem(key); return v !== null ? JSON.parse(v) : fallback; } catch { return fallback; }
+};
+const lsSet = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
+
+// --- BLOG POST RENDERER ---
+function renderBlogContent(content) {
+  const lines = content.split('\n');
+  const elements = [];
+  let i = 0;
+  let key = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.startsWith('## ')) {
+      elements.push(<h2 key={key++} className="blog-post-h2">{line.slice(3)}</h2>);
+    } else if (line.startsWith('### ')) {
+      elements.push(<h3 key={key++} className="blog-post-h3">{line.slice(4)}</h3>);
+    } else if (line === '---') {
+      elements.push(<hr key={key++} className="blog-post-hr" />);
+    } else if (line.startsWith('```')) {
+      const codeLines = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      elements.push(<pre key={key++} className="blog-post-pre"><code>{codeLines.join('\n')}</code></pre>);
+    } else if (line.startsWith('- ')) {
+      const items = [line.slice(2)];
+      while (i + 1 < lines.length && lines[i + 1].startsWith('- ')) {
+        i++;
+        items.push(lines[i].slice(2));
+      }
+      elements.push(
+        <ul key={key++} className="blog-post-ul">
+          {items.map((item, idx) => <li key={idx} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />)}
+        </ul>
+      );
+    } else if (line.trim() !== '') {
+      elements.push(<p key={key++} className="blog-post-p" dangerouslySetInnerHTML={{ __html: formatInline(line) }} />);
+    }
+
+    i++;
+  }
+
+  return elements;
+}
+
+function formatInline(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/`(.*?)`/g, '<code class="blog-inline-code">$1</code>');
+}
+
+
 export default function App() {
   const [activePage, setActivePage] = useState('home');
+  const [activeBlogPost, setActiveBlogPost] = useState(null);
   const [userInput, setUserInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [optimizedOutput, setOptimizedOutput] = useState('');
-  const [history, setHistory] = useState([]);
+  const [lastInput, setLastInput] = useState('');
+  const [history, setHistory] = useState(() => lsGet(LS_KEYS.history, []));
   const [expandedHistoryIds, setExpandedHistoryIds] = useState(new Set());
   const [toast, setToast] = useState({ show: false, message: '', isError: false });
   const [inputFocused, setInputFocused] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [selectedUseCase, setSelectedUseCase] = useState('automatic');
-  const [outputLength, setOutputLength] = useState('standard');
-  const [isDark, setIsDark] = useState(true);
+  const [selectedUseCase, setSelectedUseCase] = useState(() => lsGet(LS_KEYS.useCase, 'automatic'));
+  const [outputLength, setOutputLength] = useState(() => lsGet(LS_KEYS.outputLength, 'standard'));
+  const [isDark, setIsDark] = useState(() => lsGet(LS_KEYS.isDark, true));
   const [isMobile, setIsMobile] = useState(false);
 
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState(() => lsGet(LS_KEYS.settings, {
     model: 'llama3-70b-8192',
     style: 'Structured',
     strictness: 85
-  });
+  }));
 
-  const stateRef = useRef({ userInput, activePage, isGenerating, optimizedOutput });
+  // Persist to localStorage on change
+  useEffect(() => { lsSet(LS_KEYS.history, history); }, [history]);
+  useEffect(() => { lsSet(LS_KEYS.settings, settings); }, [settings]);
+  useEffect(() => { lsSet(LS_KEYS.useCase, selectedUseCase); }, [selectedUseCase]);
+  useEffect(() => { lsSet(LS_KEYS.outputLength, outputLength); }, [outputLength]);
+  useEffect(() => { lsSet(LS_KEYS.isDark, isDark); }, [isDark]);
+
+  const stateRef = useRef({ userInput, activePage, isGenerating, optimizedOutput, lastInput });
   useEffect(() => {
-    stateRef.current = { userInput, activePage, isGenerating, optimizedOutput };
-  }, [userInput, activePage, isGenerating, optimizedOutput]);
+    stateRef.current = { userInput, activePage, isGenerating, optimizedOutput, lastInput };
+  }, [userInput, activePage, isGenerating, optimizedOutput, lastInput]);
 
-  // Apply theme to root
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  // Detect mobile
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 600);
     check();
@@ -171,27 +249,31 @@ export default function App() {
     showToast(`Downloaded as .${ext}`);
   };
 
-  const handleOptimize = async () => {
-    const { userInput, isGenerating } = stateRef.current;
+  const runOptimize = async (inputText) => {
     if (!GROQ_API_KEY) { showToast("API key missing! Add VITE_GROQ_API_KEY to Vercel env.", true); return; }
-    if (!userInput.trim()) { showToast("Please enter a prompt to optimize!", true); return; }
-    if (isGenerating) return;
+    if (!inputText.trim()) { showToast("Please enter a prompt to optimize!", true); return; }
+    if (stateRef.current.isGenerating) return;
 
     setIsGenerating(true);
     setOptimizedOutput('');
+    setLastInput(inputText);
+
+    const currentSettings = settings;
+    const currentUseCase = selectedUseCase;
+    const currentOutputLength = outputLength;
 
     try {
       const response = await fetch(GROQ_API_URL, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: settings.model,
+          model: currentSettings.model,
           messages: [
-            { role: "system", content: buildSystemPrompt(settings.style, settings.strictness, selectedUseCase) },
-            { role: "user", content: userInput.trim() }
+            { role: "system", content: buildSystemPrompt(currentSettings.style, currentSettings.strictness, currentUseCase) },
+            { role: "user", content: inputText.trim() }
           ],
           temperature: 0.7,
-          max_tokens: OUTPUT_LENGTH_TOKENS[outputLength] || 1024,
+          max_tokens: OUTPUT_LENGTH_TOKENS[currentOutputLength] || 1024,
           top_p: 1
         })
       });
@@ -205,7 +287,7 @@ export default function App() {
       const result = data.choices[0].message.content.trim();
       setOptimizedOutput(result);
 
-      const origWords = getWordCount(userInput);
+      const origWords = getWordCount(inputText);
       const optWords = getWordCount(result);
       const timestampStr = new Date().toLocaleString('en-US', {
         year: 'numeric', month: 'short', day: 'numeric',
@@ -215,12 +297,13 @@ export default function App() {
       setHistory(prev => [{
         id: Date.now().toString(),
         timestamp: timestampStr,
-        original: userInput.trim(),
+        original: inputText.trim(),
         optimized: result,
         origWords,
         optWords,
-        useCase: selectedUseCase,
-        style: settings.style
+        useCase: currentUseCase,
+        style: currentSettings.style,
+        model: currentSettings.model,
       }, ...prev]);
 
       showToast("Prompt optimized!");
@@ -233,16 +316,30 @@ export default function App() {
     }
   };
 
+  const handleOptimize = () => {
+    const { userInput, isGenerating } = stateRef.current;
+    if (!isGenerating) runOptimize(userInput);
+  };
+
+  const handleRedo = () => {
+    const { lastInput, isGenerating } = stateRef.current;
+    if (!isGenerating && lastInput) {
+      showToast("Re-running optimization...");
+      runOptimize(lastInput);
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key === 'Enter') { e.preventDefault(); if (stateRef.current.activePage === 'home' && !stateRef.current.isGenerating) handleOptimize(); }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); if (stateRef.current.activePage === 'home' && stateRef.current.lastInput && !stateRef.current.isGenerating) handleRedo(); }
       if (mod && e.shiftKey && e.key.toLowerCase() === 'c') { e.preventDefault(); if (stateRef.current.activePage === 'home' && stateRef.current.optimizedOutput) copyText(stateRef.current.optimizedOutput); }
       if (mod && e.key === 'Backspace') { e.preventDefault(); if (stateRef.current.activePage === 'home') { setUserInput(''); showToast("Input cleared"); } }
       if (mod && e.key === '1') { e.preventDefault(); setActivePage('home'); window.scrollTo(0,0); }
       if (mod && e.key === '2') { e.preventDefault(); setActivePage('history'); window.scrollTo(0,0); }
       if (mod && e.key === '3') { e.preventDefault(); setActivePage('settings'); window.scrollTo(0,0); }
-      if (mod && e.key === '4') { e.preventDefault(); setActivePage('blog'); window.scrollTo(0,0); }
+      if (mod && e.key === '4') { e.preventDefault(); setActivePage('blog'); setActiveBlogPost(null); window.scrollTo(0,0); }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -258,8 +355,8 @@ export default function App() {
 
   const inputWords = getWordCount(userInput);
   const optWords = getWordCount(optimizedOutput);
+  const selectedModelObj = MODELS.find(m => m.id === settings.model) || MODELS[0];
 
-  // Theme toggle button
   const ThemeToggle = ({ inSettings = false }) => (
     <button
       className={`theme-toggle${inSettings ? ' theme-toggle--settings' : ''}`}
@@ -270,14 +367,10 @@ export default function App() {
       {isDark ? (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          <line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
         </svg>
       ) : (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -291,6 +384,11 @@ export default function App() {
     <div className="app-wrapper">
       <style>{globalCSS}</style>
 
+      {/* Corner orbs — dark mode only */}
+      <div className="corner-orb corner-orb-tl"></div>
+      <div className="corner-orb corner-orb-tr"></div>
+
+      {/* Floating orbs */}
       <div className="orb orb-left"></div>
       <div className="orb orb-right"></div>
       <div className="orb orb-bottom-left"></div>
@@ -311,13 +409,12 @@ export default function App() {
           <a className={`icon_link ${activePage === 'history' ? 'active' : ''}`} onClick={() => { setActivePage('history'); window.scrollTo(0,0); }} title="History (Ctrl+2)">
             <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
           </a>
-          <a className={`icon_link ${activePage === 'blog' ? 'active' : ''}`} onClick={() => { setActivePage('blog'); window.scrollTo(0,0); }} title="Blog (Ctrl+4)">
+          <a className={`icon_link ${activePage === 'blog' ? 'active' : ''}`} onClick={() => { setActivePage('blog'); setActiveBlogPost(null); window.scrollTo(0,0); }} title="Blog (Ctrl+4)">
             <svg viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
           </a>
           <a className={`icon_link ${activePage === 'settings' ? 'active' : ''}`} onClick={() => { setActivePage('settings'); window.scrollTo(0,0); }} title="Settings (Ctrl+3)">
             <svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </a>
-          {/* Theme toggle — desktop only in navbar */}
           {!isMobile && <ThemeToggle />}
         </div>
       </div>
@@ -325,12 +422,9 @@ export default function App() {
       {/* ── HOME PAGE ── */}
       <main className={`page ${activePage === 'home' ? 'active' : ''}`}>
         <h1 className="hero-header" aria-label="Write Better Prompts, instantly">
-          <span className="hero-word" style={{ animationDelay: '0.1s' }}>Write</span>
-          {' '}
-          <span className="hero-word" style={{ animationDelay: '0.25s' }}>Better</span>
-          {' '}
-          <span className="hero-word" style={{ animationDelay: '0.4s' }}>Prompts,</span>
-          {' '}
+          <span className="hero-word" style={{ animationDelay: '0.1s' }}>Write</span>{' '}
+          <span className="hero-word" style={{ animationDelay: '0.25s' }}>Better</span>{' '}
+          <span className="hero-word" style={{ animationDelay: '0.4s' }}>Prompts,</span>{' '}
           <span className="hero-word instantly-text" style={{ animationDelay: '0.58s' }}>
             instantly
             <span className="underline-bar"></span>
@@ -368,10 +462,8 @@ export default function App() {
               {selectedUseCase !== 'automatic' && (
                 <span className="advanced-badge">{USE_CASES.find(u => u.id === selectedUseCase)?.label}</span>
               )}
-              <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ transition: 'transform 0.3s ease', transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
-              >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ transition: 'transform 0.3s ease', transform: advancedOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </span>
@@ -380,6 +472,29 @@ export default function App() {
           {/* Advanced Panel */}
           <div className={`advanced-panel ${advancedOpen ? 'open' : ''}`}>
             <div className="advanced-panel-inner">
+
+              {/* Model Selector */}
+              <div className="adv-section">
+                <div className="adv-section-label">AI Model</div>
+                <div className="model-grid">
+                  {MODELS.map(m => (
+                    <button
+                      key={m.id}
+                      className={`model-chip ${settings.model === m.id ? 'selected' : ''}`}
+                      onClick={() => setSettings(s => ({ ...s, model: m.id }))}
+                      title={m.sub}
+                    >
+                      <div className="model-chip-top">
+                        <span className="model-chip-label">{m.label}</span>
+                        <span className="model-chip-badge">{m.badge}</span>
+                      </div>
+                      <span className="model-chip-sub">{m.sub}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="adv-hint">Active: <strong>{selectedModelObj.label}</strong> — {selectedModelObj.sub}</p>
+              </div>
+
               {/* Use Case Selection */}
               <div className="adv-section">
                 <div className="adv-section-label">Use Case</div>
@@ -438,7 +553,23 @@ export default function App() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
               OPTIMIZED EXPERT VERSION
             </h2>
-            {optimizedOutput && <div className="word-count">{optWords} words</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {optimizedOutput && <div className="word-count">{optWords} words</div>}
+              {/* Redo button — only shown when there's a last input and not currently generating */}
+              {lastInput && !isGenerating && (
+                <button
+                  className="btn-redo"
+                  onClick={handleRedo}
+                  title="Re-run optimization on the same input (Ctrl+Shift+R)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="1 4 1 10 7 10"></polyline>
+                    <path d="M3.51 15a9 9 0 1 0 .49-3"></path>
+                  </svg>
+                  Redo
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="output-container">
@@ -455,7 +586,7 @@ export default function App() {
                 <div className="loading-text-block">
                   <div className="loading-step-label" key={loadingStep}>{loadingSteps[loadingStep].label}</div>
                   <div className="loading-progress-bar"><div className="loading-progress-fill"></div></div>
-                  <div className="loading-model-tag">via {settings.model}</div>
+                  <div className="loading-model-tag">via {selectedModelObj.label} · {settings.style} framework</div>
                 </div>
               </div>
             )}
@@ -496,7 +627,7 @@ export default function App() {
         <div className="history-controls">
           <div className="history-title-section">
             <h1>Optimized History</h1>
-            <p>Track, inspect, and copy your previous optimized outputs.</p>
+            <p>Track, inspect, and copy your previous optimized outputs. Saved locally.</p>
           </div>
           <button className="btn-clear" onClick={() => { setHistory([]); showToast("Cleared optimization logs."); }}>Clear Logs</button>
         </div>
@@ -522,6 +653,9 @@ export default function App() {
                     <div className="history-meta">
                       {item.useCase && item.useCase !== 'automatic' && (
                         <span className="history-usecase-tag">{item.useCase}</span>
+                      )}
+                      {item.model && (
+                        <span className="history-model-tag">{MODELS.find(m => m.id === item.model)?.label || item.model}</span>
                       )}
                       <span className="history-timestamp">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ display:'inline-block', verticalAlign: 'middle', marginRight: '4px' }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
@@ -567,21 +701,62 @@ export default function App() {
 
       {/* ── BLOG PAGE ── */}
       <main className={`page ${activePage === 'blog' ? 'active' : ''}`}>
-        <div className="history-controls">
-          <div className="history-title-section">
-            <h1>The Prompt Lab</h1>
-            <p>Insights, guides, and research on the art of prompt engineering.</p>
+        {activeBlogPost ? (
+          /* ── SINGLE POST VIEW ── */
+          <div className="blog-post-view">
+            <button className="blog-back-btn" onClick={() => { setActiveBlogPost(null); window.scrollTo(0,0); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              Back to Blog
+            </button>
+            <div className="card blog-post-card" style={{ opacity: 1, transform: 'none' }}>
+              <div className="blog-post-meta-bar">
+                <span className="blog-category-tag">{activeBlogPost.category}</span>
+                <span className="blog-meta-sep">·</span>
+                <span className="blog-post-date">{activeBlogPost.date}</span>
+                <span className="blog-meta-sep">·</span>
+                <span className="blog-post-date">{activeBlogPost.readTime}</span>
+              </div>
+              <h1 className="blog-post-title">{activeBlogPost.title}</h1>
+              <div className="blog-post-body">
+                {renderBlogContent(activeBlogPost.content)}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="blog-coming-soon card" style={{ opacity: 1, transform: 'none', textAlign: 'center', padding: '60px 28px' }}>
-          <div className="blog-icon-wrap">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#D3B89A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-          </div>
-          <h2 style={{ color: '#fff', fontSize: '20px', fontFamily: "'Oswald', sans-serif", letterSpacing: '2px', fontWeight: 400, margin: '18px 0 10px' }}>CONTENT COMING SOON</h2>
-          <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: '14px', maxWidth: '360px', margin: '0 auto', lineHeight: 1.7 }}>
-            We're crafting guides on advanced prompt patterns, model-specific techniques, and real-world use cases. Check back soon.
-          </p>
-        </div>
+        ) : (
+          /* ── BLOG INDEX ── */
+          <>
+            <div className="history-controls">
+              <div className="history-title-section">
+                <h1>The Prompt Lab</h1>
+                <p>Insights, guides, and research on the art of prompt engineering.</p>
+              </div>
+            </div>
+            <div className="blog-grid">
+              {BLOG_POSTS.map(post => (
+                <div
+                  key={post.id}
+                  className="blog-card card"
+                  style={{ opacity: 1, transform: 'none', cursor: 'pointer' }}
+                  onClick={() => { setActiveBlogPost(post); window.scrollTo(0,0); }}
+                >
+                  <div className="blog-card-top">
+                    <span className="blog-category-tag">{post.category}</span>
+                    <span className="blog-card-readtime">{post.readTime}</span>
+                  </div>
+                  <h2 className="blog-card-title">{post.title}</h2>
+                  <p className="blog-card-excerpt">{post.excerpt}</p>
+                  <div className="blog-card-footer">
+                    <span className="blog-card-date">{post.date}</span>
+                    <span className="blog-card-cta">
+                      Read more
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </main>
 
       {/* ── SETTINGS PAGE ── */}
@@ -589,11 +764,10 @@ export default function App() {
         <div className="history-controls">
           <div className="history-title-section">
             <h1>Optimization Settings</h1>
-            <p>Configure model guidelines, formats, and systemic values.</p>
+            <p>All settings are saved automatically to your browser.</p>
           </div>
         </div>
 
-        {/* Theme toggle — mobile only in settings */}
         {isMobile && (
           <div className="card" style={{ opacity: 1, transform: 'none' }}>
             <h2>
@@ -619,12 +793,12 @@ export default function App() {
           </h2>
           <div className="settings-container">
             <div className="settings-row">
-              <div className="settings-label"><span>Target Groq Model</span></div>
-              <p className="settings-desc">Select the LLM routing you want to use for generation via Groq API.</p>
+              <div className="settings-label"><span>Default Model</span></div>
+              <p className="settings-desc">Select the default Groq model. Can also be changed per-prompt in Advanced Options.</p>
               <select className="select-input" value={settings.model} onChange={(e) => setSettings({...settings, model: e.target.value})}>
-                <option value="llama3-70b-8192">llama3-70b-8192 (Groq Ultra-Fast Default)</option>
-                <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 (High Context Window)</option>
-                <option value="openai/gpt-oss-120b">openai/gpt-oss-120b (Custom Configuration)</option>
+                {MODELS.map(m => (
+                  <option key={m.id} value={m.id}>{m.label} — {m.sub}</option>
+                ))}
               </select>
             </div>
             <div className="settings-row">
@@ -655,6 +829,7 @@ export default function App() {
           <div className="settings-container">
             {[
               { label: 'Optimize Prompt', desc: 'Quickly generate an optimized prompt while typing.', key: 'Ctrl/Cmd + Enter' },
+              { label: 'Redo Optimization', desc: 'Re-run the last optimization with new randomness.', key: 'Ctrl/Cmd + Shift + R' },
               { label: 'Copy Output', desc: 'Copy the latest generated prompt from the Home page.', key: 'Ctrl/Cmd + Shift + C' },
               { label: 'Clear Input Area', desc: 'Instantly erase your current draft on the Home page.', key: 'Ctrl/Cmd + Backspace' },
               { label: 'Quick Navigation', desc: 'Switch between Home (1), History (2), Blog (4), Settings (3).', key: 'Ctrl/Cmd + 1–4' },
@@ -669,13 +844,36 @@ export default function App() {
             ))}
           </div>
         </div>
+
+        <div className="card" style={{ marginTop: '24px' }}>
+          <h2>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4h6v2"></path></svg>
+            DATA MANAGEMENT
+          </h2>
+          <div className="settings-container">
+            <div className="settings-row" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="settings-label"><span>Clear All Saved Data</span></div>
+              <p className="settings-desc">Permanently deletes all history, settings, and preferences stored in your browser's local storage.</p>
+              <button className="btn-clear" style={{ marginTop: '6px', alignSelf: 'flex-start' }} onClick={() => {
+                Object.values(LS_KEYS).forEach(k => { try { localStorage.removeItem(k); } catch {} });
+                setHistory([]);
+                setSettings({ model: 'llama3-70b-8192', style: 'Structured', strictness: 85 });
+                setSelectedUseCase('automatic');
+                setOutputLength('standard');
+                showToast("All local data cleared.");
+              }}>
+                Clear All Data
+              </button>
+            </div>
+          </div>
+        </div>
       </main>
 
       {/* Footer */}
       <footer className="app-footer">
         <div className="footer-links">
           <a href="https://github.com/NOTAM-bobk/Promots.Optimzed/tree/main" target="_blank" rel="noreferrer">View Source Code</a>
-          <a onClick={() => { setActivePage('blog'); window.scrollTo(0,0); }} style={{ cursor: 'pointer' }}>Blog</a>
+          <a onClick={() => { setActivePage('blog'); setActiveBlogPost(null); window.scrollTo(0,0); }} style={{ cursor: 'pointer' }}>Blog</a>
           <a href="#">About</a>
           <a href="#">Privacy</a>
           <a href="#">Terms</a>
@@ -720,6 +918,7 @@ const globalCSS = `
     --accent: #D3B89A;
     --accent-dim: rgba(211,184,154,0.6);
     --orb-opacity: 0.25;
+    --corner-orb-opacity: 1;
     --toast-success-bg: rgba(140,155,129,0.95);
     --toast-success-color: #06070a;
     --shortcut-bg: rgba(255,255,255,0.1);
@@ -759,6 +958,7 @@ const globalCSS = `
     --accent: #a0712e;
     --accent-dim: rgba(160,113,46,0.7);
     --orb-opacity: 0.12;
+    --corner-orb-opacity: 0;
     --toast-success-bg: rgba(90,130,95,0.95);
     --toast-success-color: #fff;
     --shortcut-bg: rgba(0,0,0,0.08);
@@ -788,7 +988,48 @@ const globalCSS = `
     transition: background 0.35s ease, color 0.35s ease;
   }
 
-  /* ── ORBS ── */
+  /* ── CORNER ORBS (dark mode only) ── */
+  .corner-orb {
+    position: fixed;
+    width: 420px; height: 420px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    opacity: var(--corner-orb-opacity);
+    transition: opacity 0.35s ease;
+  }
+  .corner-orb-tl {
+    top: -180px; left: -180px;
+    background: radial-gradient(circle at 60% 60%,
+      rgba(255,255,255,0.18) 0%,
+      rgba(255,255,255,0.07) 35%,
+      transparent 70%
+    );
+    filter: blur(40px);
+    animation: cornerPulseTL 9s ease-in-out infinite alternate;
+  }
+  .corner-orb-tr {
+    top: -180px; right: -180px;
+    background: radial-gradient(circle at 40% 60%,
+      rgba(255,255,255,0.15) 0%,
+      rgba(211,184,154,0.06) 35%,
+      transparent 70%
+    );
+    filter: blur(40px);
+    animation: cornerPulseTR 11s ease-in-out infinite alternate;
+  }
+  @keyframes cornerPulseTL {
+    0%   { transform: scale(1) translate(0, 0); opacity: 0.9; }
+    50%  { transform: scale(1.12) translate(20px, 20px); opacity: 1; }
+    100% { transform: scale(0.95) translate(-10px, 10px); opacity: 0.8; }
+  }
+  @keyframes cornerPulseTR {
+    0%   { transform: scale(1) translate(0, 0); opacity: 0.8; }
+    50%  { transform: scale(1.08) translate(-15px, 15px); opacity: 1; }
+    100% { transform: scale(1.02) translate(5px, -5px); opacity: 0.85; }
+  }
+
+  /* ── FLOATING ORBS ── */
   .orb {
     position: fixed;
     border-radius: 50%;
@@ -887,10 +1128,7 @@ const globalCSS = `
   }
   .theme-toggle:hover { background: var(--bg-chip-hover); color: var(--accent); transform: translateY(-1px); }
   .theme-toggle svg { stroke: currentColor; }
-  .theme-toggle--settings {
-    width: 44px; height: 44px;
-    border-radius: 12px;
-  }
+  .theme-toggle--settings { width: 44px; height: 44px; border-radius: 12px; }
 
   @media (max-width: 600px) {
     .logo_part1 { display: none; }
@@ -966,6 +1204,29 @@ const globalCSS = `
   }
   .word-count.limit-reached { color: #f87171; border-color: rgba(248,113,113,0.3); }
 
+  /* ── REDO BUTTON ── */
+  .btn-redo {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 13px;
+    background: var(--bg-chip);
+    border: 1px solid var(--border-chip);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-redo:hover {
+    background: rgba(211,184,154,0.12);
+    border-color: var(--accent-dim);
+    color: var(--accent);
+    transform: rotate(-15deg) scale(1.05);
+  }
+  .btn-redo svg { transition: transform 0.3s ease; }
+  .btn-redo:hover svg { transform: rotate(-360deg); }
+
   /* ── TEXTAREA RING ── */
   .textarea-ring-wrapper { position: relative; border-radius: 14px; transition: box-shadow 0.35s ease; }
   .textarea-ring-wrapper.focused {
@@ -997,12 +1258,8 @@ const globalCSS = `
     margin-top: 14px;
   }
   .advanced-toggle:hover { color: var(--accent); }
-  .advanced-toggle-left {
-    display: flex; align-items: center; gap: 8px;
-  }
-  .advanced-toggle-right {
-    display: flex; align-items: center; gap: 10px;
-  }
+  .advanced-toggle-left { display: flex; align-items: center; gap: 8px; }
+  .advanced-toggle-right { display: flex; align-items: center; gap: 10px; }
   .advanced-badge {
     font-size: 10px; font-weight: 700;
     color: var(--accent); text-transform: uppercase; letter-spacing: 1px;
@@ -1012,11 +1269,8 @@ const globalCSS = `
   [data-theme="light"] .advanced-badge { background: rgba(160,113,46,0.1); }
 
   /* ── ADVANCED PANEL ── */
-  .advanced-panel {
-    max-height: 0; overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.16,1,0.3,1);
-  }
-  .advanced-panel.open { max-height: 600px; }
+  .advanced-panel { max-height: 0; overflow: hidden; transition: max-height 0.4s cubic-bezier(0.16,1,0.3,1); }
+  .advanced-panel.open { max-height: 900px; }
   .advanced-panel-inner {
     background: var(--bg-advanced);
     border-radius: 16px;
@@ -1033,15 +1287,56 @@ const globalCSS = `
   }
   .adv-hint {
     font-size: 12px; color: var(--text-muted);
-    margin: 0; line-height: 1.5;
-    min-height: 18px;
+    margin: 0; line-height: 1.5; min-height: 18px;
     transition: opacity 0.2s ease;
   }
+  .adv-hint strong { color: var(--accent); font-weight: 600; }
+
+  /* ── MODEL CHIPS ── */
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 520px) { .model-grid { grid-template-columns: 1fr 1fr; } }
+  .model-chip {
+    display: flex; flex-direction: column;
+    padding: 10px 12px;
+    background: var(--bg-chip);
+    border: 1px solid var(--border-chip);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: 'Montserrat', sans-serif;
+    text-align: left;
+    gap: 3px;
+  }
+  .model-chip:hover { background: var(--bg-chip-hover); }
+  .model-chip.selected {
+    background: var(--bg-chip-selected);
+    border-color: var(--border-chip-selected);
+  }
+  .model-chip-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .model-chip-label {
+    font-size: 12.5px; font-weight: 700;
+    color: var(--text-primary);
+  }
+  .model-chip.selected .model-chip-label { color: var(--accent); }
+  .model-chip-badge {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.8px;
+    color: var(--text-muted); background: var(--bg-chip);
+    padding: 2px 6px; border-radius: 6px;
+    border: 1px solid var(--border-chip);
+    white-space: nowrap;
+  }
+  .model-chip.selected .model-chip-badge {
+    color: var(--accent); background: rgba(211,184,154,0.1);
+    border-color: var(--accent-dim);
+  }
+  .model-chip-sub { font-size: 10.5px; color: var(--text-muted); line-height: 1.3; }
 
   /* ── USE CASE CHIPS ── */
-  .usecase-grid {
-    display: flex; flex-wrap: wrap; gap: 8px;
-  }
+  .usecase-grid { display: flex; flex-wrap: wrap; gap: 8px; }
   .usecase-chip {
     display: flex; align-items: center; gap: 7px;
     padding: 8px 14px;
@@ -1066,9 +1361,7 @@ const globalCSS = `
   .usecase-icon { font-size: 13px; opacity: 0.8; }
 
   /* ── LENGTH CHIPS ── */
-  .length-grid {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
-  }
+  .length-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   @media (max-width: 520px) { .length-grid { grid-template-columns: repeat(2, 1fr); } }
   .length-chip {
     display: flex; flex-direction: column; align-items: center;
@@ -1081,14 +1374,8 @@ const globalCSS = `
     font-family: 'Montserrat', sans-serif;
   }
   .length-chip:hover { background: var(--bg-chip-hover); }
-  .length-chip.selected {
-    background: var(--bg-chip-selected);
-    border-color: var(--border-chip-selected);
-  }
-  .length-label {
-    font-size: 12.5px; font-weight: 700;
-    color: var(--text-primary);
-  }
+  .length-chip.selected { background: var(--bg-chip-selected); border-color: var(--border-chip-selected); }
+  .length-label { font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
   .length-chip.selected .length-label { color: var(--accent); }
   .length-sub { font-size: 10px; color: var(--text-muted); margin-top: 3px; }
 
@@ -1114,15 +1401,8 @@ const globalCSS = `
   .btn-optimize:active { transform: translateY(0); }
 
   /* ── LOADING ── */
-  .loading-panel {
-    display: flex; align-items: center; gap: 28px;
-    padding: 24px 0 20px;
-  }
-  .loading-rings {
-    position: relative; width: 56px; height: 56px;
-    flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
+  .loading-panel { display: flex; align-items: center; gap: 28px; padding: 24px 0 20px; }
+  .loading-rings { position: relative; width: 56px; height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   .ring { position: absolute; border-radius: 50%; border: 1.5px solid transparent; animation: spinRing linear infinite; }
   .ring-1 { width: 56px; height: 56px; border-top-color: rgba(211,184,154,0.9); border-right-color: rgba(211,184,154,0.3); animation-duration: 1.1s; }
   .ring-2 { width: 40px; height: 40px; border-top-color: rgba(255,255,255,0.5); border-left-color: rgba(255,255,255,0.2); animation-duration: 0.8s; animation-direction: reverse; }
@@ -1143,17 +1423,9 @@ const globalCSS = `
   .output-text { min-height: 70px; color: var(--text-primary); font-size: 15.5px; line-height: 1.7; white-space: pre-wrap; }
   .output-placeholder { color: var(--text-placeholder); font-style: italic; }
 
-  /* ── OUTPUT ACTIONS (DOWNLOAD) ── */
-  .output-actions {
-    margin-top: 18px;
-    padding-top: 15px;
-    border-top: 1px solid var(--border-action-row);
-  }
-  .output-actions-label {
-    font-size: 10px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 1.5px;
-    color: var(--text-muted); margin-bottom: 10px;
-  }
+  /* ── OUTPUT ACTIONS ── */
+  .output-actions { margin-top: 18px; padding-top: 15px; border-top: 1px solid var(--border-action-row); }
+  .output-actions-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); margin-bottom: 10px; }
   .output-actions-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .btn-output-action {
     display: flex; align-items: center; gap: 6px;
@@ -1164,14 +1436,10 @@ const globalCSS = `
     font-family: 'Montserrat', sans-serif;
     font-size: 12px; font-weight: 700;
     border-radius: 30px; cursor: pointer;
-    transition: all 0.2s ease;
-    letter-spacing: 0.3px;
+    transition: all 0.2s ease; letter-spacing: 0.3px;
   }
   .btn-output-action:hover { background: var(--bg-output-action-hover); border-color: var(--accent); color: var(--accent); }
-  .btn-output-action--accent {
-    border-color: var(--accent-dim);
-    color: var(--accent);
-  }
+  .btn-output-action--accent { border-color: var(--accent-dim); color: var(--accent); }
   .btn-output-action--accent:hover { background: rgba(211,184,154,0.18); }
 
   /* ── HISTORY ── */
@@ -1179,12 +1447,9 @@ const globalCSS = `
   .history-title-section h1 { margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 1px; font-family: 'Oswald', sans-serif; color: var(--text-primary); }
   .history-title-section p { margin: 4px 0 0; font-size: 13.5px; color: var(--text-secondary); }
   .btn-clear {
-    background: transparent;
-    border: 1px solid var(--border-chip);
-    color: var(--text-secondary);
-    border-radius: 30px; padding: 8px 16px;
-    font-size: 12px; font-weight: 600;
-    cursor: pointer; transition: all 0.3s ease;
+    background: transparent; border: 1px solid var(--border-chip);
+    color: var(--text-secondary); border-radius: 30px; padding: 8px 16px;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.3s ease;
     font-family: 'Montserrat', sans-serif;
   }
   .btn-clear:hover { border-color: #f87171; color: #f87171; background: rgba(248,113,113,0.1); }
@@ -1208,11 +1473,16 @@ const globalCSS = `
   .chevron-icon { color: var(--text-muted); transition: transform 0.3s cubic-bezier(0.25,1,0.5,1), color 0.3s ease; flex-shrink: 0; display: flex; align-items: center; }
   .history-item.expanded .chevron-icon { transform: rotate(180deg); color: var(--accent); }
   .history-preview-text { font-size: 14.5px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .history-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .history-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .history-usecase-tag {
     font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
     color: var(--accent); background: rgba(211,184,154,0.1);
     border: 1px solid var(--accent-dim); padding: 3px 8px; border-radius: 10px;
+  }
+  .history-model-tag {
+    font-size: 10px; font-weight: 600;
+    color: var(--text-muted); background: var(--bg-chip);
+    border: 1px solid var(--border-chip); padding: 3px 8px; border-radius: 10px;
   }
   [data-theme="light"] .history-usecase-tag { background: rgba(160,113,46,0.1); }
   .history-timestamp { font-size: 11.5px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
@@ -1235,15 +1505,103 @@ const globalCSS = `
   .prompt-box-content { font-size: 14.5px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap; }
   .history-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
   .btn-copy {
-    background: var(--bg-output-action);
-    border: 1px solid var(--border-chip);
-    color: var(--text-secondary);
-    font-size: 12px; font-weight: 600; padding: 8px 18px; border-radius: 30px;
-    cursor: pointer; transition: all 0.2s ease;
-    font-family: 'Montserrat', sans-serif;
+    background: var(--bg-output-action); border: 1px solid var(--border-chip);
+    color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 8px 18px; border-radius: 30px;
+    cursor: pointer; transition: all 0.2s ease; font-family: 'Montserrat', sans-serif;
     display: flex; align-items: center; gap: 6px;
   }
   .btn-copy:hover { background: var(--bg-output-action-hover); border-color: var(--accent); color: var(--accent); }
+
+  /* ── BLOG INDEX ── */
+  .blog-grid { display: flex; flex-direction: column; gap: 20px; }
+  .blog-card {
+    transition: border-color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease !important;
+  }
+  .blog-card:hover {
+    border-color: var(--border-card-hover) !important;
+    box-shadow: 0 20px 45px rgba(0,0,0,0.4) !important;
+    transform: translateY(-2px) !important;
+  }
+  .blog-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .blog-category-tag {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--accent); background: rgba(211,184,154,0.1);
+    border: 1px solid var(--accent-dim); padding: 4px 10px; border-radius: 20px;
+  }
+  [data-theme="light"] .blog-category-tag { background: rgba(160,113,46,0.1); }
+  .blog-card-readtime { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .blog-card-title {
+    font-family: 'Oswald', sans-serif; font-weight: 400;
+    font-size: 22px; letter-spacing: 1px;
+    color: var(--text-primary);
+    margin: 0 0 10px;
+    line-height: 1.25;
+  }
+  .blog-card-excerpt { font-size: 14px; color: var(--text-secondary); line-height: 1.65; margin: 0 0 18px; }
+  .blog-card-footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-action-row); padding-top: 14px; }
+  .blog-card-date { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .blog-card-cta {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.3px;
+    color: var(--accent);
+    transition: gap 0.2s ease;
+  }
+  .blog-card:hover .blog-card-cta { gap: 8px; }
+
+  /* ── BLOG POST VIEW ── */
+  .blog-post-view { display: flex; flex-direction: column; gap: 20px; }
+  .blog-back-btn {
+    display: flex; align-items: center; gap: 7px;
+    background: transparent; border: 1px solid var(--border-chip);
+    color: var(--text-secondary); border-radius: 30px; padding: 8px 16px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    transition: all 0.2s ease; align-self: flex-start;
+  }
+  .blog-back-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .blog-post-card { opacity: 1 !important; transform: none !important; }
+  .blog-post-meta-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .blog-meta-sep { color: var(--text-muted); font-size: 12px; }
+  .blog-post-date { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .blog-post-title {
+    font-family: 'Oswald', sans-serif; font-weight: 400;
+    font-size: 28px; letter-spacing: 1.5px;
+    color: var(--text-primary);
+    margin: 0 0 28px;
+    line-height: 1.2;
+    border-bottom: 1px solid var(--border-action-row);
+    padding-bottom: 24px;
+  }
+  .blog-post-body { display: flex; flex-direction: column; gap: 0; user-select: text; }
+  .blog-post-h2 {
+    font-family: 'Oswald', sans-serif; font-weight: 400;
+    font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--accent); margin: 28px 0 14px;
+  }
+  .blog-post-h3 {
+    font-size: 15px; font-weight: 700;
+    color: var(--text-primary); margin: 20px 0 10px;
+  }
+  .blog-post-p { font-size: 15px; line-height: 1.75; color: var(--text-secondary); margin: 0 0 16px; }
+  .blog-post-hr { border: none; border-top: 1px solid var(--border-action-row); margin: 24px 0; }
+  .blog-post-ul { margin: 0 0 16px 20px; padding: 0; }
+  .blog-post-ul li { font-size: 14.5px; line-height: 1.7; color: var(--text-secondary); margin-bottom: 6px; }
+  .blog-post-pre {
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border-chip);
+    border-radius: 12px; padding: 16px 20px;
+    font-size: 13px; line-height: 1.6;
+    color: var(--accent); overflow-x: auto;
+    margin: 0 0 20px; font-family: 'Courier New', monospace;
+  }
+  [data-theme="light"] .blog-post-pre { background: rgba(0,0,0,0.05); color: var(--accent); }
+  .blog-inline-code {
+    background: rgba(211,184,154,0.12); border: 1px solid rgba(211,184,154,0.2);
+    color: var(--accent); padding: 1px 6px; border-radius: 5px;
+    font-size: 0.9em; font-family: 'Courier New', monospace;
+  }
 
   /* ── SETTINGS ── */
   .settings-container { display: flex; flex-direction: column; gap: 24px; }
@@ -1259,9 +1617,6 @@ const globalCSS = `
   .select-input { width: 100%; padding: 12px 14px; border-radius: 12px; background: var(--bg-select); border: 1px solid var(--border-select); color: var(--text-primary); font-family: 'Montserrat', sans-serif; font-size: 13.5px; outline: none; cursor: pointer; transition: border-color 0.3s ease; }
   .select-input:focus { border-color: var(--accent); }
   [data-theme="light"] .select-input option { background: #fff; color: #111; }
-
-  /* ── BLOG ── */
-  .blog-icon-wrap { width: 64px; height: 64px; background: rgba(211,184,154,0.08); border: 1px solid rgba(211,184,154,0.2); border-radius: 18px; display: flex; align-items: center; justify-content: center; margin: 0 auto; }
 
   /* ── NO HISTORY ── */
   .no-history-state { text-align: center; padding: 50px 28px; }
